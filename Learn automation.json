@@ -1,0 +1,601 @@
+{
+  "name": "Learn automation",
+  "nodes": [
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"category\": \"{{ $json.category }}\",\n  \"confidence\": \"{{ $json.confidence }}\",\n  \"reason\": \"{{ $json.reason }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3536,
+        288
+      ],
+      "id": "971d6ce6-0019-4799-9449-cd9ae1e35343",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "371f1aab-a561-4ed5-a098-30b9e30cec86",
+              "leftValue": "={{ $json.validation_passed }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "638595fe-53f4-452c-a210-764b2a630965",
+              "leftValue": "={{ $json.confidence }}",
+              "rightValue": "low",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3744,
+        224
+      ],
+      "id": "c3bb80d9-ab11-4405-894d-4deda9267dff",
+      "name": "confidence check"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Original message: {{ $json.message }}\n\nFast classifier reason for uncertainty: {{ $json.reason }}\n\nPlease classify this message carefully."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "=You are a precise message classifier. A fast classifier was uncertain about this message.\n\nAnalyse the message carefully and make a final decision.\n\nReturn ONLY raw JSON, no markdown:\n\n{\n\"category\": \"<selected_category>\",\n\"confidence\": \"high\",\n\"reason\": \"one sentence\"\n}\n\nValid categories:\n  booking_request | price_inquiry | complaint | general_question\n\nRules:\n* Choose exactly ONE category.\n* Never create a new category.\n* The category field must always contain one of the valid categories above.\n* Always return \"high\" confidence.\n* Never return \"medium\" or \"low\" confidence.\n* Do not output anything except the JSON object.\n\nMessage:\n{{ $json.message }}",
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -3520,
+        80
+      ],
+      "id": "e52fb06b-5467-4685-a622-b4d52dc98c03",
+      "name": "Gemini reclassifier",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "3dMMZGOTXmbesXeK",
+          "name": "Third"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Code in JavaScript').first().json;\n\nfor (const item of items) {\n  try {\n    const text = item.json.content?.parts?.[0]?.text || \"\";\n\n    const clean = text\n      .replace(/```json/g, \"\")\n      .replace(/```/g, \"\")\n      .trim();\n\n    const result = JSON.parse(clean);\n\n      const allowed = [\"booking_request\", \"price_inquiry\", \"complaint\", \"general_question\"];\nconst category = result.category;\n\nif (!allowed.includes(category)) {\n  result.validation_passed = false;\n} else {\n  result.validation_passed = true;\n}\n\n    item.json = {\n      message: source.message,\n      category: result.category || \"general\",\n      confidence: result.confidence || \"Unknown\",\n      reason: result.reason || \"Unknown\",\n      source: \"gemini-deep\",\n      validation_passed: result.validation_passed\n    };\n\n  } catch (e) {\n    item.json = {\n      message: source.message,\n      category: \"general_question\",\n      confidence: \"low\",\n      reason: \"AI returned invalid response\",\n      source: \"gemini-fast-failed\"\n    };\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3232,
+        80
+      ],
+      "id": "b1986364-1ea0-4921-b4df-480025cf1897",
+      "name": "parse Gemini"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n\"status\": \"classified\",\n   \"message\": \"{{ $json.message }}\",\n  \"category\": \"{{ $json.category }}\",\n  \"confidence\": \"{{ $json.confidence }}\",\n  \"reason\": \"{{ $json.reason }}\",\n\"source\": \"{{ $json.source }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1728,
+        -96
+      ],
+      "id": "336740dc-9da6-451e-b498-ae2480ab7a06",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.message }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "=You are a strict classification engine.\n\nTask:\nClassify the input message into exactly one internal category.\n\nOutput rules:\n\n* Return ONLY valid JSON\n* No markdown\n* No explanations\n* No extra text\n* No arrays\n* No lists\n* No schema descriptions\n* Do not print the list of categories in the output\n* The \"category\" field MUST be exactly one of the valid values above\n\nOutput format:\n\n{\n\"category\": \"<selected_category>\",\n\"confidence\": \"<high|medium|low>\",\n\"reason\": \"<one short sentence>\"\n}\n\nImportant:\n\n* Choose exactly ONE category.\n* Never create a new category.\n* The category field must always be one of:\n  booking_request | price_inquiry | complaint | general_question\n* If the message does not clearly fit a category, choose general_question and set confidence to \"low\".\n* If uncertain, choose the closest valid category and reduce confidence.\n* The response must always contain a valid category from the allowed values.\n* Return JSON only.\n\nInput:\n{{ $json.message }}",
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -4224,
+        224
+      ],
+      "id": "a484f24e-0521-4f62-b80a-b5380ea837ac",
+      "name": "Gemini Fast Classifier",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "PaW8D7XDz22z7UjW",
+          "name": "Fourth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of items) {\n  let message = item.json.message;\n\n  message = (message || \"\").trim() || \"Unknown\";\n\n  item.json.message =\n    message.charAt(0).toUpperCase() + message.slice(1);\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4416,
+        224
+      ],
+      "id": "22932d8c-de43-4653-a6b9-14344ee2c118",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "39b02a06-1a21-4fed-a394-f00ab434d0f3",
+              "leftValue": "={{ $json.validation_passed }}",
+              "rightValue": "=false",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3040,
+        80
+      ],
+      "id": "18c4090a-4a6a-47b0-9c37-8b7dddb79b84",
+      "name": "validation IF"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.message }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "=You are a classification engine.\n\nClassify the provided message into exactly one valid category.\n\nAllowed category values:\n  booking_request | price_inquiry | complaint | general_question\n\nReturn ONLY a valid JSON object with this structure:\n\n{\n\"category\": \"<selected_category>\",\n\"confidence\": \"<high|medium|low>\",\n\"reason\": \"<one short sentence>\"\n}\n\nRules:\n\n* category must contain only one classification value.\n* category must be exactly one of the allowed values.\n* Never create a new category.\n* Never return an array or list.\n* Never print all available categories in the output.\n* Never explain the classification process.\n* Never output anything outside the JSON object.\n* If uncertain, choose the closest allowed category and reduce confidence.\n\nMessage:\n{{ $json.message }}",
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -2800,
+        -48
+      ],
+      "id": "2a9d3eb7-d973-464a-a868-75f75925dad6",
+      "name": "Gemini Retry",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "BhSVzTXcrCFgiBSD",
+          "name": "Second"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Code in JavaScript').first().json;\n\nlet raw_ai_response = null;\nlet resultData = null;\n\nconst allowed = [\"booking_request\", \"price_inquiry\", \"complaint\", \"general_question\"];\n\nfor (const item of items) {\n\n  let text = \"\";\n  let clean = \"\";\n\n  try {\n    text = item.json.content?.parts?.[0]?.text || \"\";\n\n    clean = text\n      .replace(/```json/g, \"\")\n      .replace(/```/g, \"\")\n      .trim();\n\n    const result = JSON.parse(clean);\n\n    const validation_passed = allowed.includes(result.category);\n\n    raw_ai_response = {\n      category: result.category || \"general\",\n      confidence: result.confidence || \"Unknown\",\n      reason: result.reason || \"Unknown\"\n    };\n\n    resultData = {\n      message: item.json.message || source.message,\n      category: result.category || \"general\",\n      confidence: result.confidence || \"Unknown\",\n      reason: result.reason || \"Unknown\",\n      source: \"gemini-deep\",\n      validation_passed\n    };\n\n  } catch (e) {\n\n    resultData = {\n      message: item.json.message || source.message,\n      category: \"general_question\",\n      confidence: \"low\",\n      reason: \"AI returned invalid response\",\n      source: \"gemini-fast-failed\",\n      validation_passed: false\n    };\n\n    raw_ai_response = {\n      category: \"general_question\",\n      confidence: \"low\",\n      reason: \"AI returned invalid response\"\n    };\n  }\n}\n\nreturn [\n  {\n    json: {\n      resultData,\n      raw_ai_response_object: raw_ai_response\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2496,
+        -48
+      ],
+      "id": "69b06a9a-184d-4e19-a2ca-1f6936289c90",
+      "name": "Parse Retry Code"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO failed_classifications (\n  original_message,\n  original_category,\n  original_confidence,\n  original_reason,\n  original_source,\n  validation_passed,\n  raw_ai_response_object\n)\nVALUES (\n  $1,\n  $2,\n  $3,\n  $4,\n  $5,\n  $6,\n  $7::jsonb\n)\nRETURNING\n  id,\n  original_message,\n  original_category,\n  original_confidence,\n  original_reason,\n  original_source,\n  validation_passed,\n  raw_ai_response_object,\n  TO_CHAR(failed_at, 'DD/MM/YYYY') AS failed_date;",
+        "options": {
+          "queryReplacement": "={{ [\n  $json.resultData.message,\n  $json.resultData.category,\n  $json.resultData.confidence,\n  $json.resultData.reason,\n  $json.resultData.source,\n  $json.resultData.validation_passed,\n  JSON.stringify($json.raw_ai_response_object)\n] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2080,
+        -112
+      ],
+      "id": "18ceba88-24ad-41e2-8c37-f54c724eeb56",
+      "name": "insert to Neon",
+      "alwaysOutputData": false,
+      "credentials": {
+        "postgres": {
+          "id": "mkrGAjJdUENHiTP4",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Code in JavaScript').first().json;\n\nfor (const item of items) {\n  try {\n    const text = item.json.content?.parts?.[0]?.text || \"\";\n\n    const clean = text\n      .replace(/```json/g, \"\")\n      .replace(/```/g, \"\")\n      .trim();\n\n    const result = JSON.parse(clean);\n\n         const allowed = [\"booking_request\", \"price_inquiry\", \"complaint\", \"general_question\"];\nconst category = result.category;\n\nif (!allowed.includes(category)) {\n  result.validation_passed = false;\n} else {\n  result.validation_passed = true;\n}\n\n  const message = (source.message);\n    item.json.message = message.charAt(0).toUpperCase() + message.slice(1);\n    \n   item.json = {\n     message: message.charAt(0).toUpperCase() + message.slice(1),\n     category: result.category ?? \"general\",\n      confidence: result. confidence ?? \"low\",\n     reason:\n       (result.reason ?? \"AI returned invalid response\")\n     .trim()\n     .replace(/^./, c => c.toUpperCase()),\n     source: \"gemini-fast\",\n   validation_passed: result.validation_passed\n\n   }\n \n   \n\n    \n\n  } catch (e) {\n    item.json = {\n      ...item.json,\n      message: source.message,\n      category: \"general_question\",\n      confidence: \"low\",\n      reason: \"AI returned invalid response\",\n      source: \"gemini-fast-failed\"\n    };\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3936,
+        224
+      ],
+      "id": "5cb93d83-9b92-4fa0-a61c-9ffff11629f3",
+      "name": "parse gemini"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "53767785-1dcd-4128-a0df-6cb99c6637fd",
+              "leftValue": "={{ $json.resultData.validation_passed }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2304,
+        -48
+      ],
+      "id": "2e22f17c-28d1-405f-b2cb-d53664283180",
+      "name": "validatiom"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sourceFrom = $('Parse Retry Code').first().json.resultData;\nfor (const item of items) {\n  item.json = {\n    message: sourceFrom.message,\n    category: sourceFrom.category || \"general\",\n    confidence: sourceFrom.confidence || \"Unknown\",\n    reason: sourceFrom.reason || \"Unknown\",\n  };\n}\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        -112
+      ],
+      "id": "c9552345-5c99-47fe-ab31-2ba5c8ffcae9",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n\"status\": \"classified\",\n   \"message\": \"{{ $json.message }}\",\n  \"category\": \"{{ $json.category }}\",\n  \"confidence\": \"{{ $json.confidence }}\",\n  \"reason\": \"{{ $json.reason }}\",\n  \"source\": \"{{ $json.source }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2832,
+        176
+      ],
+      "id": "01620cbf-4081-4d95-8f96-6eb671c022cd",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n\"status\": \"classified\",\n   \"message\": \"{{ $json.resultData.message }}\",\n  \"category\": \"{{ $json.resultData.category }}\",\n  \"confidence\": \"{{ $json.resultData.confidence }}\",\n  \"reason\": \"{{ $json.resultData.reason }}\",\n\"source\": \"{{ $json.resultData.source }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1920,
+        160
+      ],
+      "id": "adbaf3e0-f4d7-4f0b-a228-ecd4e037216f",
+      "name": "Respond to Webhook3"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{ \"message\": \"Hi, I'm Sarah from Bright Dental, sarah@brightdental.com, we need help automating our appointment reminders, fairly urgent.\" }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4608,
+        224
+      ],
+      "id": "5c8c0aab-1e38-4d03-929e-66b931b4fab7",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4816,
+        224
+      ],
+      "id": "ca9b6376-ce8e-4474-9848-65212267cce9",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "confidence check": {
+      "main": [
+        [
+          {
+            "node": "Gemini reclassifier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini reclassifier": {
+      "main": [
+        [
+          {
+            "node": "parse Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse Gemini": {
+      "main": [
+        [
+          {
+            "node": "validation IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Fast Classifier": {
+      "main": [
+        [
+          {
+            "node": "parse gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Gemini Fast Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validation IF": {
+      "main": [
+        [
+          {
+            "node": "Gemini Retry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Retry": {
+      "main": [
+        [
+          {
+            "node": "Parse Retry Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Retry Code": {
+      "main": [
+        [
+          {
+            "node": "validatiom",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert to Neon": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse gemini": {
+      "main": [
+        [
+          {
+            "node": "confidence check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validatiom": {
+      "main": [
+        [
+          {
+            "node": "insert to Neon",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9f772248-3715-46bf-8523-5151d6165594",
+  "meta": {
+    "instanceId": "1a6a6d8b6d7820a0c8851748fe50daf3a11fadbbfbb8c5d9708a140ffa762e17"
+  },
+  "nodeGroups": [],
+  "id": "sI97IA9AMO0Iv3De",
+  "tags": []
+}
